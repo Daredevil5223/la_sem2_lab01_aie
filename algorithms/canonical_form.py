@@ -67,39 +67,73 @@ def right_canonicalize(tt: TTTensor, backend: BackendInterface) -> TTTensor:
         r_left, n_k, r_right = core.shape
 
         matrix = backend.reshape(core, (r_left, n_k * r_right))
-        U, S, Vt = backend.svd(matrix, full_matrices=False)
 
-        rank = _numerical_rank(S)
-        rank = max(1, rank)
+        if n_k * r_right >= r_left:
+            transposed = backend.transpose(matrix)
+            Q, R = backend.qr(transposed)
 
-        U_trunc = _truncate_columns(U, rank, backend)
-        S_trunc = _truncate_vector(S, rank, backend)
-        Vt_trunc = _truncate_rows(Vt, rank, backend)
+            Q_t = backend.transpose(Q)
+            R_t = backend.transpose(R)
 
-        cores[k] = backend.reshape(Vt_trunc, (rank, n_k, r_right))
+            new_rank = Q_t.shape[0]
+            cores[k] = backend.reshape(Q_t, (new_rank, n_k, r_right))
 
-        left_factor = _multiply_columns_by_diag(U_trunc, S_trunc, backend)
+            prev_core = cores[k - 1]
+            r_prev, n_prev, _ = prev_core.shape
+            new_prev_core = DenseTensor.zeros((r_prev, n_prev, new_rank))
 
-        prev_core = cores[k - 1]
-        r_prev, n_prev, _ = prev_core.shape
-        new_prev_core = DenseTensor.zeros((r_prev, n_prev, rank))
+            for i in range(n_prev):
+                slice_data = []
+                for row in range(r_prev):
+                    for col in range(r_left):
+                        slice_data.append(prev_core[row, i, col])
 
-        for i in range(n_prev):
-            slice_data = []
-            for row in range(r_prev):
-                for col in range(r_left):
-                    slice_data.append(prev_core[row, i, col])
+                slice_matrix = DenseTensor((r_prev, r_left), data=slice_data)
+                product = backend.matmul(slice_matrix, R_t)
 
-            slice_matrix = DenseTensor((r_prev, r_left), data=slice_data)
-            product = backend.matmul(slice_matrix, left_factor)
+                for row in range(r_prev):
+                    for col in range(new_rank):
+                        new_prev_core[row, i, col] = product[row, col]
 
-            for row in range(r_prev):
-                for col in range(rank):
-                    new_prev_core[row, i, col] = product[row, col]
+            cores[k - 1] = new_prev_core
 
-        cores[k - 1] = new_prev_core
+        else:
+            U, S, Vt = backend.svd(matrix, full_matrices=False)
+
+            rank = _numerical_rank(S)
+            rank = max(1, rank)
+
+            U_trunc = _truncate_columns(U, rank, backend)
+            S_trunc = _truncate_vector(S, rank, backend)
+            Vt_trunc = _truncate_rows(Vt, rank, backend)
+
+            cores[k] = backend.reshape(Vt_trunc, (rank, n_k, r_right))
+
+            left_factor = _multiply_columns_by_diag(U_trunc, S_trunc, backend)
+
+            prev_core = cores[k - 1]
+            r_prev, n_prev, _ = prev_core.shape
+            new_prev_core = DenseTensor.zeros((r_prev, n_prev, rank))
+
+            for i in range(n_prev):
+                slice_data = []
+                for row in range(r_prev):
+                    for col in range(r_left):
+                        slice_data.append(prev_core[row, i, col])
+
+                slice_matrix = DenseTensor((r_prev, r_left), data=slice_data)
+                product = backend.matmul(slice_matrix, left_factor)
+
+                for row in range(r_prev):
+                    for col in range(rank):
+                        new_prev_core[row, i, col] = product[row, col]
+
+            cores[k - 1] = new_prev_core
 
     return TTTensor(cores)
+
+
+
 
 
 # ════════════════════════════════════════════════
