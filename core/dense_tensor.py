@@ -126,9 +126,10 @@ class DenseTensor:
         Args:
             nested: список
         """
+        sequence_types = (list, tuple)
 
-        def get_shape(obj: list) -> tuple[int, ...]:
-            if not isinstance(obj, list):
+        def get_shape(obj) -> tuple[int, ...]:
+            if not isinstance(obj, sequence_types):
                 return ()
 
             if len(obj) == 0:
@@ -142,8 +143,8 @@ class DenseTensor:
 
             return (len(obj),) + first_shape
 
-        def flatten(obj: list) -> list[float]:
-            if not isinstance(obj, list):
+        def flatten(obj) -> list[float]:
+            if not isinstance(obj, sequence_types):
                 return [float(obj)]
 
             result = []
@@ -310,10 +311,10 @@ class DenseTensor:
         Args:
             other: t2
         """
-        if not isinstance(other, DenseTensor):
+        if not hasattr(other, "shape") or not hasattr(other, "data"):
             return NotImplemented
 
-        check_shapes_match(self.shape, other.shape)
+        check_shapes_match(self.shape, tuple(other.shape))
 
         data = [a + b for a, b in zip(self.data, other.data)]
         return DenseTensor(self.shape, data=data)
@@ -325,10 +326,10 @@ class DenseTensor:
         Args:
             other: t2
         """
-        if not isinstance(other, DenseTensor):
+        if not hasattr(other, "shape") or not hasattr(other, "data"):
             return NotImplemented
 
-        check_shapes_match(self.shape, other.shape)
+        check_shapes_match(self.shape, tuple(other.shape))
 
         data = [a - b for a, b in zip(self.data, other.data)]
         return DenseTensor(self.shape, data=data)
@@ -382,10 +383,10 @@ class DenseTensor:
             atol:  абсолютная погрешность (по умолчанию 1e-8)
             rtol:  относительная погрешность (по умолчанию 1e-5)
         """
-        if not isinstance(other, DenseTensor):
+        if not hasattr(other, "shape") or not hasattr(other, "data"):
             return False
 
-        if self.shape != other.shape:
+        if self.shape != tuple(other.shape):
             return False
 
         for a, b in zip(self.data, other.data):
